@@ -106,6 +106,15 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
 
     window.add_controller(motion_controller);
 
+    // Add Ctrl+W accelerator to close window
+    let close_action = gio::SimpleAction::new("close", None);
+    let window_close = window.clone();
+    close_action.connect_activate(move |_, _| {
+        window_close.close();
+    });
+    window.add_action(&close_action);
+    app.set_accels_for_action("win.close", &["<Control>w"]);
+
     window.set_child(Some(&overlay));
 
     // Apply CSS for transparency and rounded corners

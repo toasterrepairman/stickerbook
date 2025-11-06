@@ -31,6 +31,15 @@ pub fn create_main_window(app: &Application, recent_store: Rc<RefCell<RecentStor
         glib::Propagation::Proceed
     });
 
+    // Add Ctrl+Q accelerator to quit
+    let quit_action = gio::SimpleAction::new("quit", None);
+    let window_quit = window.clone();
+    quit_action.connect_activate(move |_, _| {
+        window_quit.close();
+    });
+    window.add_action(&quit_action);
+    app.set_accels_for_action("win.quit", &["<Control>q"]);
+
     // Create headerbar
     let headerbar = adw::HeaderBar::new();
 

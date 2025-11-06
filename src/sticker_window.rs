@@ -17,19 +17,42 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
     // Make window background transparent
     window.add_css_class("transparent-window");
 
-    // Create overlay for headerbar
-    let overlay = gtk::Overlay::new();
-
     // Create the image/animation display using gtk::Picture
     let picture = gtk::Picture::new();
     picture.set_can_shrink(true);
     picture.set_content_fit(gtk::ContentFit::Contain);
 
+    // Set minimum size for the picture widget
+    picture.set_size_request(25, 25);
+
+    // Variables to store aspect ratio
+    let mut aspect_ratio = 1.0_f32;
+    let mut has_image = false;
+
     // Load the image or animated GIF using PixbufAnimation
     if let Ok(animation) = PixbufAnimation::from_file(image_path) {
+        let pixbuf = if animation.is_static_image() {
+            animation.static_image()
+        } else {
+            Some(animation.iter(None).pixbuf())
+        };
+
+        // Get aspect ratio and set window size
+        if let Some(pixbuf) = &pixbuf {
+            let width = pixbuf.width();
+            let height = pixbuf.height();
+            aspect_ratio = width as f32 / height as f32;
+            has_image = true;
+
+            // Set initial window size based on image dimensions (minimum 25x25)
+            let initial_width = width.max(25);
+            let initial_height = height.max(25);
+            window.set_default_size(initial_width, initial_height);
+        }
+
         if animation.is_static_image() {
             // For static images, just set the pixbuf
-            if let Some(pixbuf) = animation.static_image() {
+            if let Some(pixbuf) = pixbuf {
                 let texture = gdk::Texture::for_pixbuf(&pixbuf);
                 picture.set_paintable(Some(&texture));
             }
@@ -59,7 +82,16 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
         picture.set_filename(Some(image_path));
     }
 
-    overlay.set_child(Some(&picture));
+    // Wrap picture in AspectFrame to maintain aspect ratio during resize
+    let aspect_frame = gtk::AspectFrame::builder()
+        .ratio(aspect_ratio)
+        .obey_child(false)
+        .build();
+    aspect_frame.set_child(Some(&picture));
+
+    // Create overlay for headerbar
+    let overlay = gtk::Overlay::new();
+    overlay.set_child(Some(&aspect_frame));
 
     // Create headerbar
     let headerbar = adw::HeaderBar::new();

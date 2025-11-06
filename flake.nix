@@ -57,9 +57,9 @@
 
         postInstall = ''
             # Install desktop file
-            install -Dm644 resources/com.github.stickerbook.desktop $out/share/applications/com.github.stickerbook.desktop
+            install -Dm644 resources/com.github.Stickerbook.desktop $out/share/applications/com.github.Stickerbook.desktop
 
-            install -Dt $out/share/icons resources/icon-stickerbook.png
+            # install -Dt $out/share/icons resources/icon-stickerbook.png
         '';
       };
 

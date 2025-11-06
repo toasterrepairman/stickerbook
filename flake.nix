@@ -59,7 +59,7 @@
             # Install desktop file
             install -Dm644 resources/com.github.toasterrepair.Stickerbook.desktop $out/share/applications/com.github.Stickerbook.desktop
 
-            install -Dt $out/share/icons resources/icon-stickerbook.png
+            install -Dt $out/share/icons resources/com.github.toasterrepair.Stickerbook.png
         '';
       };
 

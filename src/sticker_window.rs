@@ -20,7 +20,7 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
     // Create the image/animation display using gtk::Picture
     let picture = gtk::Picture::new();
     picture.set_can_shrink(true);
-    picture.set_content_fit(gtk::ContentFit::Contain);
+    picture.set_content_fit(gtk::ContentFit::Cover);
 
     // Set minimum size for the picture widget
     picture.set_size_request(25, 25);

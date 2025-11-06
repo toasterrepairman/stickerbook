@@ -65,6 +65,8 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
     let headerbar = adw::HeaderBar::new();
     headerbar.add_css_class("osd");
     headerbar.set_show_title(false);
+    headerbar.set_show_start_title_buttons(false);
+    headerbar.set_show_end_title_buttons(false);
 
     // Add close button
     let close_button = gtk::Button::builder()
@@ -106,11 +108,51 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
 
     window.set_child(Some(&overlay));
 
-    // Apply CSS for transparency
+    // Apply CSS for transparency and rounded corners
     let css_provider = gtk::CssProvider::new();
     css_provider.load_from_string(
         r#"
-        .transparent-window {
+        .transparent-window,
+        .transparent-window:backdrop {
+            background: transparent;
+            box-shadow: none;
+            border: none;
+        }
+
+        /* Remove any default window decorations/shadows */
+        .transparent-window decoration,
+        .transparent-window:backdrop decoration {
+            background: transparent;
+            box-shadow: none;
+            border: none;
+        }
+
+        /* Make headerbar rounded and semi-transparent for both active and backdrop states */
+        .transparent-window headerbar.osd,
+        .transparent-window:backdrop headerbar.osd {
+            border-radius: 12px !important;
+            background: alpha(@headerbar_bg_color, 0.9);
+            backdrop-filter: blur(10px);
+            margin: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        /* Ensure headerbar children respect rounded corners */
+        .transparent-window headerbar.osd > *,
+        .transparent-window:backdrop headerbar.osd > * {
+            border-radius: 12px;
+        }
+
+        /* Clip content to rounded corners */
+        .transparent-window headerbar.osd windowhandle,
+        .transparent-window:backdrop headerbar.osd windowhandle {
+            border-radius: 12px;
+        }
+
+        /* Ensure revealer doesn't add extra styling */
+        .transparent-window revealer,
+        .transparent-window:backdrop revealer {
             background: transparent;
         }
         "#,
@@ -119,7 +161,7 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
     gtk::style_context_add_provider_for_display(
         &gdk::Display::default().expect("Could not connect to display"),
         &css_provider,
-        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        gtk::STYLE_PROVIDER_PRIORITY_USER,
     );
 
     window.present();

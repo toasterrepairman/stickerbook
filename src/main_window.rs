@@ -62,27 +62,57 @@ pub fn create_main_window(app: &Application, recent_store: Rc<RefCell<RecentStor
         .vexpand(true)
         .build();
 
-    // Create horizontal box for recent items
-    let recent_box = gtk::Box::builder()
-        .orientation(gtk::Orientation::Horizontal)
-        .spacing(12)
+    // Create grid for recent items (supports multiple rows)
+    let recent_grid = gtk::Grid::builder()
+        .row_spacing(12)
+        .column_spacing(12)
         .margin_start(12)
         .margin_end(12)
         .margin_top(12)
         .margin_bottom(12)
+        .vexpand(true)
+        .valign(gtk::Align::Fill)
         .build();
 
-    scrolled.set_child(Some(&recent_box));
+    scrolled.set_child(Some(&recent_grid));
     toolbar_view.set_content(Some(&scrolled));
 
+    // Track number of rows to display based on window height
+    let max_rows = Rc::new(RefCell::new(2));
+
     // Load and display recent items
-    refresh_recent_items(&recent_box, app, recent_store.clone(), child_windows.clone());
+    refresh_recent_items(&recent_grid, app, recent_store.clone(), child_windows.clone(), *max_rows.borrow());
+
+    // Set up window resize handler to adapt row count
+    let max_rows_resize = max_rows.clone();
+    let recent_grid_resize = recent_grid.clone();
+    let recent_store_resize = recent_store.clone();
+    let app_resize = app.clone();
+    let child_windows_resize = child_windows.clone();
+
+    window.connect_default_height_notify(move |win| {
+        let height = win.default_height();
+        let new_max_rows = if height < 400 { 1 } else { 2 };
+        let current_max_rows = *max_rows_resize.borrow();
+
+        if new_max_rows != current_max_rows {
+            *max_rows_resize.borrow_mut() = new_max_rows;
+            refresh_recent_items(
+                &recent_grid_resize,
+                &app_resize,
+                recent_store_resize.clone(),
+                child_windows_resize.clone(),
+                new_max_rows
+            );
+        }
+    });
 
     // Set up file chooser
     let recent_store_clone = recent_store.clone();
     let app_clone = app.clone();
-    let recent_box_clone = recent_box.clone();
+    let recent_grid_clone = recent_grid.clone();
     let child_windows_clone = child_windows.clone();
+    let max_rows_clone = max_rows.clone();
     add_button.connect_clicked(move |button| {
         let dialog = gtk::FileDialog::builder()
             .title("Select Image or GIF")
@@ -103,8 +133,9 @@ pub fn create_main_window(app: &Application, recent_store: Rc<RefCell<RecentStor
 
         let recent_store = recent_store_clone.clone();
         let app = app_clone.clone();
-        let recent_box = recent_box_clone.clone();
+        let recent_grid = recent_grid_clone.clone();
         let child_windows = child_windows_clone.clone();
+        let max_rows = max_rows_clone.clone();
 
         dialog.open(window.as_ref(), gtk::gio::Cancellable::NONE, move |result| {
             if let Ok(file) = result {
@@ -112,7 +143,7 @@ pub fn create_main_window(app: &Application, recent_store: Rc<RefCell<RecentStor
                     let path_str = path.to_string_lossy().to_string();
                     recent_store.borrow_mut().add(path_str);
                     let _ = recent_store.borrow().save();
-                    refresh_recent_items(&recent_box, &app, recent_store.clone(), child_windows.clone());
+                    refresh_recent_items(&recent_grid, &app, recent_store.clone(), child_windows.clone(), *max_rows.borrow());
                 }
             }
         });
@@ -123,10 +154,11 @@ pub fn create_main_window(app: &Application, recent_store: Rc<RefCell<RecentStor
 }
 
 fn refresh_recent_items(
-    container: &gtk::Box,
+    container: &gtk::Grid,
     app: &Application,
     recent_store: Rc<RefCell<RecentStore>>,
     child_windows: Rc<RefCell<Vec<gtk::ApplicationWindow>>>,
+    max_rows: i32,
 ) {
     // Clear existing items
     while let Some(child) = container.first_child() {
@@ -134,6 +166,9 @@ fn refresh_recent_items(
     }
 
     let items = recent_store.borrow().items().to_vec();
+
+    let mut col = 0;
+    let mut row = 0;
 
     for item in items {
         if !Path::new(&item.path).exists() {
@@ -147,6 +182,8 @@ fn refresh_recent_items(
             .width_request(150)
             .height_request(150)
             .can_shrink(true)
+            .vexpand(true)
+            .hexpand(false)
             .content_fit(gtk::ContentFit::Cover)
             .build();
 
@@ -220,7 +257,7 @@ fn refresh_recent_items(
         remove_button.connect_clicked(move |_| {
             recent_store_remove.borrow_mut().remove(&path_for_remove);
             let _ = recent_store_remove.borrow().save();
-            refresh_recent_items(&container_clone, &app_clone, recent_store_remove.clone(), child_windows_remove.clone());
+            refresh_recent_items(&container_clone, &app_clone, recent_store_remove.clone(), child_windows_remove.clone(), max_rows);
         });
 
         item_overlay.add_overlay(&remove_button);
@@ -228,7 +265,17 @@ fn refresh_recent_items(
         // Add frame for better appearance
         let frame = gtk::Frame::new(None);
         frame.set_child(Some(&item_overlay));
+        frame.set_vexpand(true);
+        frame.set_valign(gtk::Align::Fill);
 
-        container.append(&frame);
+        // Add to grid with row/column layout
+        container.attach(&frame, col, row, 1, 1);
+
+        // Update position for next item
+        row += 1;
+        if row >= max_rows {
+            row = 0;
+            col += 1;
+        }
     }
 }

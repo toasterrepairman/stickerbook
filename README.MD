@@ -1,6 +1,6 @@
 # stickerbook
 
-![stickerbook icon](resources/icon-stickerbook.png)
+![stickerbook icon](resources/com.github.toasterrepair.Stickerbook.png)
 
 ## collect and display digital stickers
 

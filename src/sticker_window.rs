@@ -28,6 +28,8 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
     // Variables to store aspect ratio
     let mut aspect_ratio = 1.0_f32;
     let mut has_image = false;
+    let mut image_width = 400;
+    let mut image_height = 400;
 
     // Load the image or animated GIF using PixbufAnimation
     if let Ok(animation) = PixbufAnimation::from_file(image_path) {
@@ -43,11 +45,11 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
             let height = pixbuf.height();
             aspect_ratio = width as f32 / height as f32;
             has_image = true;
+            image_width = width.max(25);
+            image_height = height.max(25);
 
-            // Set initial window size based on image dimensions (minimum 25x25)
-            let initial_width = width.max(25);
-            let initial_height = height.max(25);
-            window.set_default_size(initial_width, initial_height);
+            // Set initial window size based on image dimensions
+            window.set_default_size(image_width, image_height);
         }
 
         if animation.is_static_image() {
@@ -100,14 +102,60 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
     headerbar.set_show_start_title_buttons(false);
     headerbar.set_show_end_title_buttons(false);
 
+    // Store rotation state
+    let rotation_angle = Rc::new(RefCell::new(0));
+    let rotation_angle_clone = rotation_angle.clone();
+    let picture_clone = picture.clone();
+    let window_clone = window.clone();
+
+    // Add rotate button on the left
+    let rotate_button = gtk::Button::builder()
+        .icon_name("object-rotate-right-symbolic")
+        .tooltip_text("Rotate 90°")
+        .build();
+
+    rotate_button.connect_clicked(move |_| {
+        let mut angle = rotation_angle_clone.borrow_mut();
+        *angle = (*angle + 90) % 360;  // Clockwise rotation
+
+        // Apply rotation using CSS transform
+        let css_provider = gtk::CssProvider::new();
+        let rotation_css = format!(
+            r#"
+            picture {{
+                transform: rotate({}deg);
+                transition: transform 200ms ease-in-out;
+            }}
+            "#,
+            *angle
+        );
+        css_provider.load_from_string(&rotation_css);
+
+        picture_clone.style_context().add_provider(
+            &css_provider,
+            gtk::STYLE_PROVIDER_PRIORITY_USER,
+        );
+
+        // Swap window dimensions for 90° and 270° rotations to match transformed image
+        if has_image {
+            if *angle == 90 || *angle == 270 {
+                window_clone.set_default_size(image_height, image_width);
+            } else {
+                window_clone.set_default_size(image_width, image_height);
+            }
+        }
+    });
+
+    headerbar.pack_start(&rotate_button);
+
     // Add close button
     let close_button = gtk::Button::builder()
         .icon_name("window-close-symbolic")
         .build();
 
-    let window_clone = window.clone();
+    let window_close = window.clone();
     close_button.connect_clicked(move |_| {
-        window_clone.close();
+        window_close.close();
     });
 
     headerbar.pack_end(&close_button);

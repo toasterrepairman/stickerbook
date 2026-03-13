@@ -1,7 +1,7 @@
+use gdk_pixbuf::PixbufAnimation;
 use gtk::prelude::*;
 use gtk::{gdk, glib, Application};
 use libadwaita as adw;
-use gdk_pixbuf::PixbufAnimation;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::SystemTime;
@@ -116,7 +116,7 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
 
     rotate_button.connect_clicked(move |_| {
         let mut angle = rotation_angle_clone.borrow_mut();
-        *angle = (*angle + 90) % 360;  // Clockwise rotation
+        *angle = (*angle + 90) % 360; // Clockwise rotation
 
         // Apply rotation using CSS transform
         let css_provider = gtk::CssProvider::new();
@@ -131,10 +131,9 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
         );
         css_provider.load_from_string(&rotation_css);
 
-        picture_clone.style_context().add_provider(
-            &css_provider,
-            gtk::STYLE_PROVIDER_PRIORITY_USER,
-        );
+        picture_clone
+            .style_context()
+            .add_provider(&css_provider, gtk::STYLE_PROVIDER_PRIORITY_USER);
 
         // Swap window dimensions for 90° and 270° rotations to match transformed image
         if has_image {
@@ -220,7 +219,7 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
         .transparent-window headerbar.osd,
         .transparent-window:backdrop headerbar.osd {
             border-radius: 12px !important;
-            background: alpha(@headerbar_bg_color, 0.9);
+            background: transparent;
             backdrop-filter: blur(10px);
             margin: 6px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);

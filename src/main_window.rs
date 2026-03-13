@@ -1,12 +1,12 @@
+use gdk_pixbuf::PixbufAnimation;
 use gtk::prelude::*;
 use gtk::{gdk, glib, Application};
 use libadwaita as adw;
 use libadwaita::prelude::*;
 use std::cell::RefCell;
-use std::rc::Rc;
 use std::path::Path;
+use std::rc::Rc;
 use std::time::SystemTime;
-use gdk_pixbuf::PixbufAnimation;
 
 use crate::recent_store::RecentStore;
 use crate::sticker_window;
@@ -81,7 +81,13 @@ pub fn create_main_window(app: &Application, recent_store: Rc<RefCell<RecentStor
     let max_rows = Rc::new(RefCell::new(2));
 
     // Load and display recent items
-    refresh_recent_items(&recent_grid, app, recent_store.clone(), child_windows.clone(), *max_rows.borrow());
+    refresh_recent_items(
+        &recent_grid,
+        app,
+        recent_store.clone(),
+        child_windows.clone(),
+        *max_rows.borrow(),
+    );
 
     // Set up window resize handler to adapt row count
     let max_rows_resize = max_rows.clone();
@@ -102,7 +108,7 @@ pub fn create_main_window(app: &Application, recent_store: Rc<RefCell<RecentStor
                 &app_resize,
                 recent_store_resize.clone(),
                 child_windows_resize.clone(),
-                new_max_rows
+                new_max_rows,
             );
         }
     });
@@ -137,16 +143,26 @@ pub fn create_main_window(app: &Application, recent_store: Rc<RefCell<RecentStor
         let child_windows = child_windows_clone.clone();
         let max_rows = max_rows_clone.clone();
 
-        dialog.open(window.as_ref(), gtk::gio::Cancellable::NONE, move |result| {
-            if let Ok(file) = result {
-                if let Some(path) = file.path() {
-                    let path_str = path.to_string_lossy().to_string();
-                    recent_store.borrow_mut().add(path_str);
-                    let _ = recent_store.borrow().save();
-                    refresh_recent_items(&recent_grid, &app, recent_store.clone(), child_windows.clone(), *max_rows.borrow());
+        dialog.open(
+            window.as_ref(),
+            gtk::gio::Cancellable::NONE,
+            move |result| {
+                if let Ok(file) = result {
+                    if let Some(path) = file.path() {
+                        let path_str = path.to_string_lossy().to_string();
+                        recent_store.borrow_mut().add(path_str);
+                        let _ = recent_store.borrow().save();
+                        refresh_recent_items(
+                            &recent_grid,
+                            &app,
+                            recent_store.clone(),
+                            child_windows.clone(),
+                            *max_rows.borrow(),
+                        );
+                    }
                 }
-            }
-        });
+            },
+        );
     });
 
     window.set_content(Some(&toolbar_view));
@@ -166,6 +182,21 @@ fn refresh_recent_items(
     }
 
     let items = recent_store.borrow().items().to_vec();
+
+    // Show empty state if no stickers
+    if items.is_empty() {
+        let status_page = adw::StatusPage::builder()
+            .title("No Stickers")
+            .description("Click the + button to add a sticker")
+            .icon_name("list-add-symbolic")
+            .vexpand(true)
+            .hexpand(true)
+            .halign(gtk::Align::Center)
+            .valign(gtk::Align::Center)
+            .build();
+        container.attach(&status_page, 0, 0, 1, 1);
+        return;
+    }
 
     let mut col = 0;
     let mut row = 0;
@@ -257,7 +288,13 @@ fn refresh_recent_items(
         remove_button.connect_clicked(move |_| {
             recent_store_remove.borrow_mut().remove(&path_for_remove);
             let _ = recent_store_remove.borrow().save();
-            refresh_recent_items(&container_clone, &app_clone, recent_store_remove.clone(), child_windows_remove.clone(), max_rows);
+            refresh_recent_items(
+                &container_clone,
+                &app_clone,
+                recent_store_remove.clone(),
+                child_windows_remove.clone(),
+                max_rows,
+            );
         });
 
         item_overlay.add_overlay(&remove_button);

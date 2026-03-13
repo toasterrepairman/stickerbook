@@ -27,9 +27,9 @@ echo "Done! Bundle created: stickerbook.flatpak"
 
 # Cleanup prompt
 echo ""
-read -p "Remove build directory and repo? [y/N] " -n 1 -r
+read -p "Remove build directory, repo, and flatpak-builder cache? [y/N] " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    rm -rf build-dir /tmp/repo
+    rm -rf build-dir /tmp/repo .flatpak-builder
     echo "Cleaned up build artifacts."
 fi

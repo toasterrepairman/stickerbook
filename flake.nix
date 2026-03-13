@@ -39,6 +39,8 @@
         git
         wrapGAppsHook4
         libsecret
+        flatpak-builder
+        flatpak
       ];
 
       rustPlatform = pkgs.makeRustPlatform {
@@ -69,6 +71,10 @@
         nativeBuildInputs = packageDeps;
         # CUDA_ROOT = "${pkgs.cudaPackages.cudatoolkit}";
         buildInputs = [(rustVersion.override {extensions = ["rust-src"];})];
+
+        shellHook = ''
+          alias regen-vendor='cargo vendor vendor && tar czf vendor.tar.gz vendor'
+        '';
       };
 
       meta = with nixpkgs.lib; {

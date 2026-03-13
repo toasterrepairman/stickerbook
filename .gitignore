@@ -1,0 +1,23 @@
+# Flatpak build
+build-dir/
+builddir/
+vendor.tar.gz
+*.flatpak
+
+# Flatpak builder cache
+.flatpak-builder/
+
+# Cargo
+vendor/
+target/
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

@@ -215,29 +215,6 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
             border: none;
         }
 
-        /* Make headerbar rounded and semi-transparent for both active and backdrop states */
-        .transparent-window headerbar.osd,
-        .transparent-window:backdrop headerbar.osd {
-            border-radius: 12px !important;
-            background: transparent;
-            backdrop-filter: blur(10px);
-            margin: 6px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-            overflow: hidden;
-        }
-
-        /* Ensure headerbar children respect rounded corners */
-        .transparent-window headerbar.osd > *,
-        .transparent-window:backdrop headerbar.osd > * {
-            border-radius: 12px;
-        }
-
-        /* Clip content to rounded corners */
-        .transparent-window headerbar.osd windowhandle,
-        .transparent-window:backdrop headerbar.osd windowhandle {
-            border-radius: 12px;
-        }
-
         /* Ensure revealer doesn't add extra styling */
         .transparent-window revealer,
         .transparent-window:backdrop revealer {

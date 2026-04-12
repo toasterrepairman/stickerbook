@@ -74,6 +74,7 @@
 
         shellHook = ''
           alias regen-vendor='cargo vendor vendor && tar czf vendor.tar.gz vendor'
+          echo "To build Flatpak: ./scripts/build-flatpak.sh"
         '';
       };
 

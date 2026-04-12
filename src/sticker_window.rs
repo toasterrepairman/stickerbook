@@ -1,7 +1,6 @@
 use gdk_pixbuf::PixbufAnimation;
 use gtk::prelude::*;
 use gtk::{gdk, glib, Application};
-use libadwaita as adw;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::SystemTime;
@@ -12,6 +11,7 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
         .default_width(400)
         .default_height(400)
         .decorated(false)
+        .resizable(false)
         .build();
 
     // Make window background transparent
@@ -91,24 +91,23 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
         .build();
     aspect_frame.set_child(Some(&picture));
 
-    // Create overlay for headerbar
-    let overlay = gtk::Overlay::new();
-    overlay.set_child(Some(&aspect_frame));
+    // Create popover with controls
+    let popover = gtk::Popover::new();
+    let popover_box = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    popover_box.set_margin_start(6);
+    popover_box.set_margin_end(6);
+    popover_box.set_margin_top(6);
+    popover_box.set_margin_bottom(6);
 
-    // Create headerbar
-    let headerbar = adw::HeaderBar::new();
-    headerbar.add_css_class("osd");
-    headerbar.set_show_title(false);
-    headerbar.set_show_start_title_buttons(false);
-    headerbar.set_show_end_title_buttons(false);
-
-    // Store rotation state
+    // Store rotation and scale state
     let rotation_angle = Rc::new(RefCell::new(0));
+    let scale = Rc::new(RefCell::new(1.0_f32));
     let rotation_angle_clone = rotation_angle.clone();
+    let scale_clone = scale.clone();
     let picture_clone = picture.clone();
     let window_clone = window.clone();
 
-    // Add rotate button on the left
+    // Rotate button in popover
     let rotate_button = gtk::Button::builder()
         .icon_name("object-rotate-right-symbolic")
         .tooltip_text("Rotate 90°")
@@ -116,9 +115,8 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
 
     rotate_button.connect_clicked(move |_| {
         let mut angle = rotation_angle_clone.borrow_mut();
-        *angle = (*angle + 90) % 360; // Clockwise rotation
+        *angle = (*angle + 90) % 360;
 
-        // Apply rotation using CSS transform
         let css_provider = gtk::CssProvider::new();
         let rotation_css = format!(
             r#"
@@ -135,21 +133,23 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
             .style_context()
             .add_provider(&css_provider, gtk::STYLE_PROVIDER_PRIORITY_USER);
 
-        // Swap window dimensions for 90° and 270° rotations to match transformed image
         if has_image {
-            if *angle == 90 || *angle == 270 {
-                window_clone.set_default_size(image_height, image_width);
+            let s = scale_clone.borrow();
+            let ratio = if *angle == 90 || *angle == 270 {
+                image_height as f32 / image_width as f32
             } else {
-                window_clone.set_default_size(image_width, image_height);
-            }
+                image_width as f32 / image_height as f32
+            };
+            let w = (image_width as f32 * *s).max(25.0) as i32;
+            let h = (w as f32 / ratio).max(25.0) as i32;
+            window_clone.set_default_size(w, h);
         }
     });
 
-    headerbar.pack_start(&rotate_button);
-
-    // Add close button
+    // Close button in popover
     let close_button = gtk::Button::builder()
         .icon_name("window-close-symbolic")
+        .tooltip_text("Close")
         .build();
 
     let window_close = window.clone();
@@ -157,33 +157,86 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
         window_close.close();
     });
 
-    headerbar.pack_end(&close_button);
+    popover_box.append(&rotate_button);
+    popover_box.append(&close_button);
+    popover.set_child(Some(&popover_box));
+    popover.set_parent(&aspect_frame);
 
-    // Wrap headerbar in a revealer for auto-hide behavior
-    let revealer = gtk::Revealer::builder()
-        .transition_type(gtk::RevealerTransitionType::SlideDown)
-        .transition_duration(200)
-        .reveal_child(false)
-        .valign(gtk::Align::Start)
-        .build();
+    // Right-click gesture to show popover
+    let right_click = gtk::GestureClick::new();
+    right_click.set_button(3);
 
-    revealer.set_child(Some(&headerbar));
-    overlay.add_overlay(&revealer);
-
-    // Set up motion controller for showing/hiding headerbar
-    let motion_controller = gtk::EventControllerMotion::new();
-
-    let revealer_show = revealer.clone();
-    motion_controller.connect_enter(move |_, _, _| {
-        revealer_show.set_reveal_child(true);
+    let popover_show = popover.clone();
+    right_click.connect_pressed(move |_, _, x, y| {
+        popover_show.set_pointing_to(Some(&gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
+        popover_show.popup();
     });
 
-    let revealer_hide = revealer.clone();
-    motion_controller.connect_leave(move |_| {
-        revealer_hide.set_reveal_child(false);
+    aspect_frame.add_controller(right_click);
+
+    // Double-click gesture for rotate
+    let double_click = gtk::GestureClick::new();
+    double_click.set_button(1);
+
+    let rotate_btn = rotate_button.clone();
+    double_click.connect_pressed(move |_, n_press, _, _| {
+        if n_press == 2 {
+            rotate_btn.emit_clicked();
+        }
     });
 
-    window.add_controller(motion_controller);
+    aspect_frame.add_controller(double_click);
+
+    // Scroll-to-scale gesture
+    let scale_clone = scale.clone();
+    let aspect_ratio_for_scale = aspect_ratio;
+    let rotation_angle_for_scale = rotation_angle.clone();
+
+    let scroll = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
+
+    let scroll_window = window.clone();
+    scroll.connect_scroll(move |_, _, dy| {
+        let mut s = scale_clone.borrow_mut();
+        let delta = (-dy as f32 * 0.1).clamp(-0.2, 0.2);
+        *s = (*s + delta).clamp(0.2, 5.0);
+
+        let angle = *rotation_angle_for_scale.borrow();
+        let ratio = if angle == 90 || angle == 270 {
+            1.0 / aspect_ratio_for_scale
+        } else {
+            aspect_ratio_for_scale
+        };
+
+        let w = (image_width as f32 * *s).max(25.0) as i32;
+        let h = (w as f32 / ratio).max(25.0) as i32;
+        scroll_window.set_default_size(w, h);
+
+        glib::Propagation::Proceed
+    });
+
+    aspect_frame.add_controller(scroll);
+
+    // Drag gesture to move the window
+    let drag = gtk::GestureDrag::new();
+
+    let drag_window = window.clone();
+    drag.connect_drag_begin(move |gesture, start_x, start_y| {
+        gesture.set_state(gtk::EventSequenceState::Claimed);
+        if let Some(surface) = drag_window.surface() {
+            if let Ok(toplevel) = surface.downcast::<gdk::Toplevel>() {
+                let device = gesture.device().unwrap();
+                toplevel.begin_move(
+                    &device,
+                    gesture.current_button() as i32,
+                    start_x,
+                    start_y,
+                    gesture.current_event_time(),
+                );
+            }
+        }
+    });
+
+    aspect_frame.add_controller(drag);
 
     // Add Ctrl+W accelerator to close window
     let close_action = gio::SimpleAction::new("close", None);
@@ -194,7 +247,7 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
     window.add_action(&close_action);
     app.set_accels_for_action("win.close", &["<Control>w"]);
 
-    window.set_child(Some(&overlay));
+    window.set_child(Some(&aspect_frame));
 
     // Apply CSS for transparency and rounded corners
     let css_provider = gtk::CssProvider::new();
@@ -213,12 +266,6 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
             background: transparent;
             box-shadow: none;
             border: none;
-        }
-
-        /* Ensure revealer doesn't add extra styling */
-        .transparent-window revealer,
-        .transparent-window:backdrop revealer {
-            background: transparent;
         }
         "#,
     );

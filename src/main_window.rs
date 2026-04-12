@@ -21,11 +21,12 @@ pub fn create_main_window(app: &Application, recent_store: Rc<RefCell<RecentStor
 
     // Track child windows
     let child_windows: Rc<RefCell<Vec<gtk::ApplicationWindow>>> = Rc::new(RefCell::new(Vec::new()));
+    let thumbnail_source_ids: Rc<RefCell<Vec<glib::SourceId>>> = Rc::new(RefCell::new(Vec::new()));
 
-    // Close all child windows when main window closes
     let child_windows_close = child_windows.clone();
     window.connect_close_request(move |_| {
-        for child in child_windows_close.borrow().iter() {
+        let children: Vec<_> = child_windows_close.borrow().iter().cloned().collect();
+        for child in children {
             child.close();
         }
         glib::Propagation::Proceed
@@ -86,6 +87,7 @@ pub fn create_main_window(app: &Application, recent_store: Rc<RefCell<RecentStor
         app,
         recent_store.clone(),
         child_windows.clone(),
+        thumbnail_source_ids.clone(),
         *max_rows.borrow(),
     );
 
@@ -95,6 +97,7 @@ pub fn create_main_window(app: &Application, recent_store: Rc<RefCell<RecentStor
     let recent_store_resize = recent_store.clone();
     let app_resize = app.clone();
     let child_windows_resize = child_windows.clone();
+    let thumbnail_source_ids_resize = thumbnail_source_ids.clone();
 
     window.connect_default_height_notify(move |win| {
         let height = win.default_height();
@@ -108,6 +111,7 @@ pub fn create_main_window(app: &Application, recent_store: Rc<RefCell<RecentStor
                 &app_resize,
                 recent_store_resize.clone(),
                 child_windows_resize.clone(),
+                thumbnail_source_ids_resize.clone(),
                 new_max_rows,
             );
         }
@@ -119,6 +123,7 @@ pub fn create_main_window(app: &Application, recent_store: Rc<RefCell<RecentStor
     let recent_grid_clone = recent_grid.clone();
     let child_windows_clone = child_windows.clone();
     let max_rows_clone = max_rows.clone();
+    let thumbnail_source_ids_clone = thumbnail_source_ids.clone();
     add_button.connect_clicked(move |button| {
         let dialog = gtk::FileDialog::builder()
             .title("Select Image or GIF")
@@ -142,6 +147,7 @@ pub fn create_main_window(app: &Application, recent_store: Rc<RefCell<RecentStor
         let recent_grid = recent_grid_clone.clone();
         let child_windows = child_windows_clone.clone();
         let max_rows = max_rows_clone.clone();
+        let thumbnail_source_ids = thumbnail_source_ids_clone.clone();
 
         dialog.open(
             window.as_ref(),
@@ -157,6 +163,7 @@ pub fn create_main_window(app: &Application, recent_store: Rc<RefCell<RecentStor
                             &app,
                             recent_store.clone(),
                             child_windows.clone(),
+                            thumbnail_source_ids.clone(),
                             *max_rows.borrow(),
                         );
                     }
@@ -174,9 +181,13 @@ fn refresh_recent_items(
     app: &Application,
     recent_store: Rc<RefCell<RecentStore>>,
     child_windows: Rc<RefCell<Vec<gtk::ApplicationWindow>>>,
+    thumbnail_source_ids: Rc<RefCell<Vec<glib::SourceId>>>,
     max_rows: i32,
 ) {
-    // Clear existing items
+    for id in thumbnail_source_ids.borrow_mut().drain(..) {
+        id.remove();
+    }
+
     while let Some(child) = container.first_child() {
         container.remove(&child);
     }
@@ -237,8 +248,8 @@ fn refresh_recent_items(
                 let texture = gdk::Texture::for_pixbuf(&pixbuf);
                 picture.set_paintable(Some(&texture));
 
-                // Animate frames (thumbnails animate slower to reduce CPU usage)
-                glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
+                let thumbnail_source_ids = thumbnail_source_ids.clone();
+                let id = glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
                     let iter = iter_rc.borrow_mut();
                     iter.advance(SystemTime::now());
                     let pixbuf = iter.pixbuf();
@@ -246,6 +257,7 @@ fn refresh_recent_items(
                     picture_clone.set_paintable(Some(&texture));
                     glib::ControlFlow::Continue
                 });
+                thumbnail_source_ids.borrow_mut().push(id);
             }
         } else {
             // Fallback to filename if loading fails
@@ -261,7 +273,11 @@ fn refresh_recent_items(
         gesture.connect_released(move |_, _, _, _| {
             recent_store_click.borrow_mut().add(path_clone.clone());
             let _ = recent_store_click.borrow().save();
-            let child_window = sticker_window::create_sticker_window(&app_clone, &path_clone);
+            let child_window = sticker_window::create_sticker_window(
+                &app_clone,
+                &path_clone,
+                child_windows_click.clone(),
+            );
             child_windows_click.borrow_mut().push(child_window);
         });
         picture.add_controller(gesture);
@@ -284,6 +300,7 @@ fn refresh_recent_items(
         let container_clone = container.clone();
         let app_clone = app.clone();
         let child_windows_remove = child_windows.clone();
+        let thumbnail_source_ids_remove = thumbnail_source_ids.clone();
         let path_for_remove = item.path.clone();
         remove_button.connect_clicked(move |_| {
             recent_store_remove.borrow_mut().remove(&path_for_remove);
@@ -293,6 +310,7 @@ fn refresh_recent_items(
                 &app_clone,
                 recent_store_remove.clone(),
                 child_windows_remove.clone(),
+                thumbnail_source_ids_remove.clone(),
                 max_rows,
             );
         });

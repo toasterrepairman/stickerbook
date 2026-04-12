@@ -5,7 +5,11 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::SystemTime;
 
-pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::ApplicationWindow {
+pub fn create_sticker_window(
+    app: &Application,
+    image_path: &str,
+    child_windows: Rc<RefCell<Vec<gtk::ApplicationWindow>>>,
+) -> gtk::ApplicationWindow {
     let window = gtk::ApplicationWindow::builder()
         .application(app)
         .default_width(400)
@@ -31,7 +35,8 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
     let mut image_width = 400;
     let mut image_height = 400;
 
-    // Load the image or animated GIF using PixbufAnimation
+    let anim_source_id: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
+
     if let Ok(animation) = PixbufAnimation::from_file(image_path) {
         let pixbuf = if animation.is_static_image() {
             animation.static_image()
@@ -39,7 +44,6 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
             Some(animation.iter(None).pixbuf())
         };
 
-        // Get aspect ratio and set window size
         if let Some(pixbuf) = &pixbuf {
             let width = pixbuf.width();
             let height = pixbuf.height();
@@ -48,29 +52,25 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
             image_width = width.max(25);
             image_height = height.max(25);
 
-            // Set initial window size based on image dimensions
             window.set_default_size(image_width, image_height);
         }
 
         if animation.is_static_image() {
-            // For static images, just set the pixbuf
             if let Some(pixbuf) = pixbuf {
                 let texture = gdk::Texture::for_pixbuf(&pixbuf);
                 picture.set_paintable(Some(&texture));
             }
         } else {
-            // For animated images, set up frame animation
             let iter = animation.iter(None);
             let iter_rc = Rc::new(RefCell::new(iter));
             let picture_clone = picture.clone();
 
-            // Set initial frame
             let pixbuf = iter_rc.borrow().pixbuf();
             let texture = gdk::Texture::for_pixbuf(&pixbuf);
             picture.set_paintable(Some(&texture));
 
-            // Animate frames
-            glib::timeout_add_local(std::time::Duration::from_millis(30), move || {
+            let source_id_clone = anim_source_id.clone();
+            let id = glib::timeout_add_local(std::time::Duration::from_millis(30), move || {
                 let iter = iter_rc.borrow_mut();
                 iter.advance(SystemTime::now());
                 let pixbuf = iter.pixbuf();
@@ -78,6 +78,7 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
                 picture_clone.set_paintable(Some(&texture));
                 glib::ControlFlow::Continue
             });
+            *source_id_clone.borrow_mut() = Some(id);
         }
     } else {
         // Fallback to filename if loading fails
@@ -248,6 +249,19 @@ pub fn create_sticker_window(app: &Application, image_path: &str) -> gtk::Applic
     app.set_accels_for_action("win.close", &["<Control>w"]);
 
     window.set_child(Some(&aspect_frame));
+
+    let anim_source_id_close = anim_source_id.clone();
+    let window_for_removal = window.clone();
+    let child_windows_close = child_windows.clone();
+    window.connect_close_request(move |_| {
+        if let Some(id) = anim_source_id_close.borrow_mut().take() {
+            id.remove();
+        }
+        child_windows_close
+            .borrow_mut()
+            .retain(|w| w != &window_for_removal);
+        glib::Propagation::Proceed
+    });
 
     // Apply CSS for transparency and rounded corners
     let css_provider = gtk::CssProvider::new();

@@ -67,6 +67,8 @@ pub fn create_main_window(app: &Application, recent_store: Rc<RefCell<RecentStor
     let recent_grid = gtk::Grid::builder()
         .row_spacing(12)
         .column_spacing(12)
+        .row_homogeneous(true)
+        .column_homogeneous(true)
         .margin_start(12)
         .margin_end(12)
         .margin_top(12)

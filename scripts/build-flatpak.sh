@@ -4,19 +4,14 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.." 
 
-# Update lockfile
+# Update lockfile and regenerate vendor
+rm -rf vendor vendor.tar.gz
 cargo generate-lockfile
-
-# Generate vendor if needed
-if [ ! -d "vendor" ] || [ ! -f "vendor.tar.gz" ]; then
-    echo "Generating vendor directory..."
-    cargo vendor vendor
-    echo "Creating vendor.tar.gz..."
-    tar czf vendor.tar.gz vendor
-    echo "Vendor ready!"
-else
-    echo "Vendor already exists, skipping generation."
-fi
+echo "Generating vendor directory..."
+cargo vendor vendor
+echo "Creating vendor.tar.gz..."
+tar czf vendor.tar.gz vendor
+echo "Vendor ready!"
 
 # Build Flatpak
 echo "Building Flatpak..."

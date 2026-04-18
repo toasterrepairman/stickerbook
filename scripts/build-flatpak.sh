@@ -4,6 +4,9 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.." 
 
+# Update lockfile
+cargo generate-lockfile
+
 # Generate vendor if needed
 if [ ! -d "vendor" ] || [ ! -f "vendor.tar.gz" ]; then
     echo "Generating vendor directory..."
